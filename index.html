@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pong vs Pared</title>
+
+    <style>
+        body{
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            height:100vh;
+            background-color: #000000;
+            margin:0;
+            color: rgb(218, 162, 232);
+            font-family: sans-serif;
+            flex-direction:column;
+
+
+        }
+        canvas{
+            background-color: #d4a7e2;
+            border: 2px solid #600f90;
+            box-shadow: 0 0 15px rgba(202, 127, 222, 0.931);
+            border-radius: 20px;
+
+
+        }
+        p{
+            margin-top: 15px;
+            color: #aaa;
+        }
+        /* pantalla de inicio que cubre el juego mientras se pide el nombre */
+        #PantallaInicio, #PantallaResultados{
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 10;
+        }
+        #PantallaInicio input, #PantallaInicio button, #PantallaResultados button{
+            font-size: 18px;
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: 2px solid #600f90;
+        }
+        #PantallaInicio button, #PantallaResultados button{
+            background-color: #600f90;
+            color: #fff;
+            cursor: pointer;
+        }
+        /* pantalla de resultados, oculta hasta que el jugador pierde */
+        #PantallaResultados{
+            display: none;
+        }
+        #PantallaResultados table{
+            border-collapse: collapse;
+            min-width: 420px;
+        }
+        #PantallaResultados th, #PantallaResultados td{
+            border: 1px solid #600f90;
+            padding: 8px 14px;
+            text-align: center;
+        }
+        #PantallaResultados th{
+            background-color: #600f90;
+            color: #fff;
+        }
+        /* resalta la partida actual si entró al top 3 */
+        #PantallaResultados tr.actual td{
+            background-color: rgba(202, 127, 222, 0.35);
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+   
+    
+     <div id="PantallaInicio">
+        <h2>¿Cómo te llamas?</h2>
+        <input
+            type="text"
+            id="nombre"
+            placeholder="Nombre del jugador..."
+        >
+        <button onclick="entrar()">
+            Entrar
+        </button>
+    </div>
+
+    <div id="PantallaResultados">
+        <h2>¡Perdiste!</h2>
+
+        <h3>Tu partida</h3>
+        <table>
+            <thead>
+                <tr><th>Jugador</th><th>Score</th><th>Nivel</th><th>Fecha</th></tr>
+            </thead>
+            <tbody id="tablaPartidaActual"></tbody>
+        </table>
+
+        <h3>Top 3 mejores scores</h3>
+        <table>
+            <thead>
+                <tr><th>#</th><th>Jugador</th><th>Score</th><th>Nivel</th><th>Fecha</th></tr>
+            </thead>
+            <tbody id="tablaMejores"></tbody>
+        </table>
+
+        <button onclick="jugarDeNuevo()">Jugar de nuevo</button>
+    </div>
+
+
+    <h2>Entrenamiento: pong vs pared</h2>
+        <!--canvas de 800 x 450  -->
+    <canvas id="gameCanvas" width="800" height="450"></canvas>
+    <p>Usa las teclas <b>R</b> / <b>F</b> o las <b>Flechas</b> para mover la paleta</p>
+    
+    <script src="game.js"></script>
+    
+</body>
+</html>
