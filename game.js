@@ -26,6 +26,58 @@ let score = 0;
 let estado = "inicio";
 let nombreJugador = "";
 const DURACION_BIENVENIDA = 2000; // milisegundos que se muestra el mensaje
+let inicioBienvenida = 0;
+
+// ---------- efectos visuales (no afectan la física) ----------
+const COLORES = {
+    fondoArriba: "#1a0b2e",
+    fondoAbajo: "#0b0614",
+    linea: "rgba(233, 168, 255, 0.18)",
+    paleta: "#e9a8ff",
+    brilloPaleta: "#a855f7",
+    pelota: "#ffffff",
+    brilloPelota: "#f472b6",
+    pared: "#22d3ee",
+    texto: "#f3e8ff",
+    textoSuave: "rgba(243, 232, 255, 0.55)",
+};
+const FUENTE = '"Orbitron", "Segoe UI", sans-serif';
+const LARGO_ESTELA = 14;
+
+let estela = [];      // posiciones anteriores de la pelota
+let particulas = [];  // chispas al golpear
+let destelloPared = 0;   // 0..1, brillo de la pared al rebotar
+let destelloPaleta = 0;  // 0..1, brillo de la paleta al golpear
+let pulsoPuntos = 0;     // 0..1, animación del marcador
+
+function crearParticulas(x, y, direccion, color, cantidad) {
+    for (let i = 0; i < cantidad; i++) {
+        const angulo = (Math.random() - 0.5) * Math.PI * 0.9;
+        const rapidez = 2 + Math.random() * 4;
+        particulas.push({
+            x, y,
+            vx: Math.cos(angulo) * rapidez * direccion,
+            vy: Math.sin(angulo) * rapidez,
+            vida: 1,
+            tamano: 2 + Math.random() * 2.5,
+            color,
+        });
+    }
+}
+
+function actualizarEfectos() {
+    for (const p of particulas) {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.95;
+        p.vy *= 0.95;
+        p.vida -= 0.03;
+    }
+    particulas = particulas.filter((p) => p.vida > 0);
+    destelloPared = Math.max(0, destelloPared - 0.05);
+    destelloPaleta = Math.max(0, destelloPaleta - 0.06);
+    pulsoPuntos = Math.max(0, pulsoPuntos - 0.05);
+}
 
 //captura de eventos del taclado
 document.addEventListener("keydown", (e) => {
@@ -53,6 +105,7 @@ function entrar(){
     nombreJugador = nombre.trim();
     document.getElementById("PantallaInicio").style.display = "none"; // ocultar pantalla de inicio
     estado = "bienvenida";
+    inicioBienvenida = performance.now();
 
     // después de unos segundos comienza el juego
     setTimeout(() => {
@@ -89,6 +142,8 @@ function update() {
     //rebote en la pared derecha (simulando el modo practica)
     if (ball.x + ball.radius > canvas.width - 10) {  // -10 por el grosor de la pared dibujada
     ball.speedX *= -1;
+    destelloPared = 1;
+    crearParticulas(canvas.width - 10, ball.y, -1, COLORES.pared, 10);
     }
 
 
@@ -105,6 +160,9 @@ function update() {
          ball.x = paddle.x + paddle.width + ball.radius; //evitar que la pelota se quede pegada a la paleta
          score += 10;
          levels();
+         destelloPaleta = 1;
+         pulsoPuntos = 1;
+         crearParticulas(paddle.x + paddle.width, ball.y, 1, COLORES.brilloPelota, 14);
 
     }
     if(ball.x < 0){
@@ -159,6 +217,8 @@ function resetGame() {
     score = 0;
     nivelActual = 0;
     paddle.speed = VELOCIDAD_PALETA_INICIAL;
+    estela = [];
+    particulas = [];
 }
 
 // ---------- tabla de resultados ----------
@@ -242,46 +302,186 @@ document.addEventListener("keydown", (e) => {
 });
 
 // Dibujo de los elementos en el Canvas
-function draw() {
-    // Limpiar el fotograma anterior
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+function dibujarFondo() {
+    const degradado = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    degradado.addColorStop(0, COLORES.fondoArriba);
+    degradado.addColorStop(1, COLORES.fondoAbajo);
+    ctx.fillStyle = degradado;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Dibujar pared derecha (visual)
-    ctx.fillStyle = "#555";
+    // cuadrícula sutil
+    ctx.strokeStyle = "rgba(168, 85, 247, 0.07)";
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= canvas.width; x += 40) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+    }
+    for (let y = 0; y <= canvas.height; y += 40) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+    }
+
+    // línea central punteada
+    ctx.strokeStyle = COLORES.linea;
+    ctx.lineWidth = 3;
+    ctx.setLineDash([14, 14]);
+    ctx.beginPath();
+    ctx.moveTo(canvas.width / 2, 0);
+    ctx.lineTo(canvas.width / 2, canvas.height);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // círculo central
+    ctx.beginPath();
+    ctx.arc(canvas.width / 2, canvas.height / 2, 60, 0, Math.PI * 2);
+    ctx.stroke();
+}
+
+function dibujarPared() {
+    ctx.save();
+    ctx.shadowColor = COLORES.pared;
+    ctx.shadowBlur = 12 + destelloPared * 30;
+    ctx.fillStyle = COLORES.pared;
+    ctx.globalAlpha = 0.6 + destelloPared * 0.4;
     ctx.fillRect(canvas.width - 10, 0, 10, canvas.height);
+    ctx.restore();
+}
 
-    // Dibujar paleta
-    ctx.fillStyle = "#600f90";
-    ctx.fillRect(paddle.x, paddle.y, paddle.width, paddle.height);
+function dibujarPaleta() {
+    ctx.save();
+    ctx.shadowColor = COLORES.brilloPaleta;
+    ctx.shadowBlur = 18 + destelloPaleta * 25;
+    const degradado = ctx.createLinearGradient(paddle.x, 0, paddle.x + paddle.width, 0);
+    degradado.addColorStop(0, COLORES.brilloPaleta);
+    degradado.addColorStop(1, COLORES.paleta);
+    ctx.fillStyle = destelloPaleta > 0.5 ? "#ffffff" : degradado;
+    ctx.beginPath();
+    ctx.roundRect(paddle.x, paddle.y, paddle.width, paddle.height, 7);
+    ctx.fill();
+    ctx.restore();
+}
 
-    // Dibujar pelota
+function dibujarPelota() {
+    // estela
+    for (let i = 0; i < estela.length; i++) {
+        const t = (i + 1) / estela.length;
+        ctx.beginPath();
+        ctx.arc(estela[i].x, estela[i].y, ball.radius * t, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(244, 114, 182, ${t * 0.35})`;
+        ctx.fill();
+    }
+
+    ctx.save();
+    ctx.shadowColor = COLORES.brilloPelota;
+    ctx.shadowBlur = 25;
+    const degradado = ctx.createRadialGradient(
+        ball.x - 3, ball.y - 3, 1, ball.x, ball.y, ball.radius
+    );
+    degradado.addColorStop(0, COLORES.pelota);
+    degradado.addColorStop(1, COLORES.brilloPelota);
     ctx.beginPath();
     ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-    ctx.fillStyle = "#600f90";
+    ctx.fillStyle = degradado;
     ctx.fill();
-    ctx.closePath();
+    ctx.restore();
+}
 
-    // Dibujar marcador
-    ctx.font = "30px Arial";
-    ctx.fillText("Puntos: " + score, canvas.width / 2 - 60, 40);
+function dibujarParticulas() {
+    ctx.save();
+    for (const p of particulas) {
+        ctx.globalAlpha = p.vida;
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.tamano * p.vida, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+}
 
-    // Dibujar nivel actual (esquina superior derecha, junto a la pared)
+function dibujarMarcador() {
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.fillStyle = COLORES.textoSuave;
+    ctx.font = `500 12px ${FUENTE}`;
+    ctx.fillText("PUNTOS", canvas.width / 2, 28);
+
+    const escala = 1 + pulsoPuntos * 0.25;
+    ctx.translate(canvas.width / 2, 62);
+    ctx.scale(escala, escala);
+    ctx.shadowColor = COLORES.brilloPelota;
+    ctx.shadowBlur = 10 + pulsoPuntos * 20;
+    ctx.fillStyle = COLORES.texto;
+    ctx.font = `900 34px ${FUENTE}`;
+    ctx.fillText(score, 0, 0);
+    ctx.restore();
+
+    // nivel (esquina superior derecha, junto a la pared)
+    ctx.save();
     ctx.textAlign = "right";
-    ctx.fillText("Nivel: " + nivelMostrado(), canvas.width - 30, 40);
-    ctx.textAlign = "start";
+    ctx.fillStyle = COLORES.textoSuave;
+    ctx.font = `500 12px ${FUENTE}`;
+    ctx.fillText("NIVEL", canvas.width - 30, 28);
+    ctx.fillStyle = COLORES.pared;
+    ctx.shadowColor = COLORES.pared;
+    ctx.shadowBlur = 10;
+    ctx.font = `700 24px ${FUENTE}`;
+    ctx.fillText(nivelMostrado(), canvas.width - 30, 56);
+
+    // jugador (esquina superior izquierda)
+    if (nombreJugador) {
+        ctx.textAlign = "left";
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = COLORES.textoSuave;
+        ctx.font = `500 12px ${FUENTE}`;
+        ctx.fillText("JUGADOR", 60, 28);
+        ctx.fillStyle = COLORES.paleta;
+        ctx.font = `700 18px ${FUENTE}`;
+        ctx.fillText(nombreJugador, 60, 54);
+    }
+    ctx.restore();
+}
+
+function dibujarBienvenida() {
+    ctx.save();
+    ctx.fillStyle = "rgba(5, 2, 12, 0.7)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.textAlign = "center";
+    ctx.shadowColor = COLORES.brilloPaleta;
+    ctx.shadowBlur = 20;
+    ctx.fillStyle = COLORES.texto;
+    ctx.font = `900 36px ${FUENTE}`;
+    ctx.fillText("¡Bienvenido, " + nombreJugador + "!", canvas.width / 2, canvas.height / 2 - 40);
+
+    // cuenta regresiva animada
+    const restante = Math.max(0, DURACION_BIENVENIDA - (performance.now() - inicioBienvenida));
+    const segundos = Math.ceil(restante / 1000);
+    const fraccion = (restante % 1000) / 1000;
+    ctx.globalAlpha = 0.4 + fraccion * 0.6;
+    ctx.shadowColor = COLORES.brilloPelota;
+    ctx.fillStyle = COLORES.brilloPelota;
+    ctx.font = `900 ${50 + fraccion * 30}px ${FUENTE}`;
+    ctx.fillText(segundos > 0 ? segundos : "¡YA!", canvas.width / 2, canvas.height / 2 + 50);
+
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = COLORES.textoSuave;
+    ctx.font = `500 14px ${FUENTE}`;
+    ctx.fillText("Prepárate...", canvas.width / 2, canvas.height / 2 + 100);
+    ctx.restore();
+}
+
+function draw() {
+    dibujarFondo();
+    dibujarPared();
+    dibujarMarcador();
+    dibujarParticulas();
+    dibujarPaleta();
+    dibujarPelota();
 
     // mensaje de bienvenida antes de comenzar
     if (estado === "bienvenida") {
-        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        ctx.fillStyle = "#ffffff";
-        ctx.textAlign = "center";
-        ctx.font = "40px Arial";
-        ctx.fillText("¡Bienvenido, " + nombreJugador + "!", canvas.width / 2, canvas.height / 2);
-        ctx.font = "20px Arial";
-        ctx.fillText("El juego comenzará en un momento...", canvas.width / 2, canvas.height / 2 + 40);
-        ctx.textAlign = "start"; // regresar a la alineación normal
+        dibujarBienvenida();
     }
 }
 
@@ -290,7 +490,10 @@ function gameLoop() {
     // la pelota y la paleta solo se mueven cuando el juego ya comenzó
     if (estado === "jugando") {
         update();
+        estela.push({ x: ball.x, y: ball.y });
+        if (estela.length > LARGO_ESTELA) estela.shift();
     }
+    actualizarEfectos();
     draw();
     requestAnimationFrame(gameLoop);
 }
